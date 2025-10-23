@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Team Time</title>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: #f9f9f9; color: #333; }
+        .container { max-width: 95%; width: 1600px; margin: 1rem auto; padding: 1rem; }
+        header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        h1 { margin: 0; font-size: 1.5rem; }
+        h1 { margin: 0; }
+        .controls { display: flex; justify-content: center; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            table-layout: fixed;
+        }
+        th, td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        th { background-color: #f4f6f8; font-weight: 600; }
+
+        col.col-name { width: 180px; }
+        col.col-status { width: 120px; }
+        col.col-work-time { width: 180px; }
+        col.col-local-time { width: 140px; }
+        col.col-hour { width: 20px; }
+
+        .group-header th {
+            background-color: #e9eff6;
+            color: #254e7b;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: left;
+            padding: 12px 18px;
+            border-bottom: 2px solid #c8d4e3;
+        }
+
+        .status { font-weight: bold; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        .status.online { color: #218838; background-color: #d4edda; }
+        .status.possible { color: #b8860b; background-color: #fff3cd; }
+        .status.offline { color: #a0a0a0; background-color: #f0f0f0; }
+
+        .time-interval { display: block; margin-bottom: 4px; }
+        .time-interval.work { color: #28a745; font-weight: 600; }
+        .time-interval.possible { color: #e09600; font-weight: 400; }
+
+        .local-time { font-size: 0.9rem; color: #555; }
+
+        select, button { font-size: 1rem; padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; background-color: #fff; cursor: pointer; }
+        button:hover { background-color: #f9f9f9; }
+        /* lang-select видалено */
+
+        .timeline-header-labels th {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #666;
+            padding: 8px 2px;
+            border-bottom: 2px solid #ddd;
+        }
+        .hour-cell {
+            padding: 0;
+            height: 10px;
+            background-color: #f8f9fa;
+            border-left: 1px solid #eee;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hour-bar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .hour-segment {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            height: 100%;
+        }
+        .segment-work {
+            background-color: #28a745;
+        }
+        .segment-possible {
+            background-color: #ffc107;
+        }
+
+        /* --- ОНОВЛЕНІ ЛІНІЇ-РОЗДІЛЬНИКИ --- */
+        /* Робимо лінії чорними */
+        .timeline-header-labels th:nth-child(4n+5) {
+            border-right: 2px solid black;
+        }
+        tbody td:nth-child(4n+8) {
+            border-right: 2px solid black;
+        }
+        /* --- Кінець оновлення --- */
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1 id="header-title">Team Availability</h1>
+            <label for="tz-select">Your timezone:</label>
+            <select id="tz-select"></select>
+            <button id="local-tz-btn">My Local</button>
+            </header>
+
+        <br>
+        <table id="team-table">
+            <colgroup>
+                <col class="col-name">
+                <col class="col-status">
+                <col class="col-work-time">
+                <col class="col-local-time">
+                <script>
+                    for (let i = 0; i < 24; i++) {
+                        document.write('<col class="col-hour">');
+                    }
+                </script>
+            </colgroup>
+
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Work Time</th>
+                    <th>Local Time</th>
+                    <th colspan="24" style="text-align: center;">Timeline 0-24 (in selected timezone)</th>
+                </tr>
+                </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        const teamData = [
+            { name: "Andrii Rukavchuk", position: "Dev", timezone: "Europe/Kyiv", workTime: [
+                { start: "08:00", end: "17:00", type: "work" },
+                { start: "17:00", end: "21:00", type: "possible" }
+            ]},
+            { name: "Dmitriy Kislicyn", position: "Dev", timezone: "Asia/Omsk", workTime: [
+                { start: "15:30", end: "21:30", type: "work" },
+                { start: "13:30", end: "23:30", type: "possible" }
+
+            ]},
+            { name: "Oleksandr Buksha", position: "Dev", timezone: "Europe/Lisbon", workTime: [
+                { start: "09:00", end: "17:00", type: "work" },
+                { start: "8:00", end: "19:00", type: "possible" },
+            ]},
+            { name: "Stas Larionov", position: "Dev", timezone: "Asia/Omsk", workTime: [
+                { start: "12:00", end: "20:00", type: "work" },
+                { start: "20:00", end: "00:00", type: "possible" }
+            ]},
+            { name: "Sergey Veretilo", position: "Dev", timezone: "Europe/Madrid", workTime: [
+                { start: "10:00", end: "20:00", type: "work" }
+            ]},
+            { name: "Sergey Tymtsunik", position: "Dev", timezone: "Europe/Berlin", workTime: []},
+            { name: "Valentin Diianov", position: "Dev", timezone: "Asia/Aqtobe", workTime: [
+                { start: "11:00", end: "18:00", type: "work" },
+                { start: "10:00", end: "23:00", type: "possible" }
+            ]},
+            { name: "Valerii Tomov", position: "Dev", timezone: "Europe/Bucharest", workTime: [
+                { start: "09:00", end: "18:00", type: "work" },
+                { start: "18:00", end: "21:00", type: "possible" }
+            ]},
+            { name: "Evgen Chugunov", position: "PM", timezone: "Europe/Kyiv", workTime: [
+                { start: "09:00", end: "18:00", type: "work" },
+                { start: "18:00", end: "23:00", type: "possible" }
+            ]},
+            { name: "Yuliia Semets", position: "PM", timezone: "Europe/Lisbon", workTime: [
+                { start: "08:00", end: "18:00", type: "work" },
+                { start: "18:00", end: "22:00", type: "possible" }
+            ]},
+            { name: "Tetiana Byrak", position: "BA", timezone: "Europe/Kyiv", workTime: [
+                { start: "09:00", end: "18:00", type: "work" },
+                { start: "18:00", end: "00:00", type: "possible" }
+            ]},
+            { name: "Anton Parhomenko", position: "BA", timezone: "Europe/Kyiv", workTime: [
+                { start: "09:00", end: "19:00", type: "work" },
+                { start: "19:00", end: "23:00", type: "possible" }
+            ]},
+            { name: "Nijat Kazimzada", position: "BA", timezone: "Asia/Baku", workTime: [
+                { start: "08:00", end: "17:00", type: "work" },
+                { start: "07:00", end: "22:00", type: "possible" }
+            ]},
+            { name: "Victoria M.", position: "PO", timezone: "Asia/Makassar", workTime: [
+                { start: "09:00", end: "19:00", type: "work" },
+                { start: "19:00", end: "23:00", type: "possible" }
+            ]}
+        ];
+
+        teamData.sort((a, b) => {
+            if (!a.position) return 1;
+            if (!b.position) return -1;
+            return a.position.localeCompare(b.position);
+        });
+
+        // Словник перекладів видалено
+
+        const { DateTime, Interval } = luxon;
+        const tableBody = document.querySelector("#team-table tbody");
+        const tzSelect = document.querySelector("#tz-select");
+        const localTzBtn = document.querySelector("#local-tz-btn");
+        // langSelect видалено
+
+        let currentTZ = DateTime.local().zoneName;
+
+        // Створюємо HTML для рядка 00-23 ОДИН РАЗ
+        let timelineHeaderHTML = '<th colspan="4" style="border-bottom: 2px solid #ddd;"></th>';
+        for (let i = 0; i < 24; i++) {
+            timelineHeaderHTML += `<th class="timeline-header-label">${i.toString().padStart(2, '0')}</th>`;
+        }
+
+        function populateTimezones() {
+            const popularTimezones = [
+                "UTC", "Europe/London", "Europe/Kyiv", "Europe/Berlin", "Europe/Lisbon",
+                "Asia/Yerevan", "Asia/Tbilisi", "Asia/Baku",
+                "Asia/Omsk", "Asia/Aqtobe", "Asia/Makassar",
+                "America/New_York", "America/Los_Angeles"
+            ];
+
+            teamData.forEach(person => {
+                if (person.timezone && !popularTimezones.includes(person.timezone)) {
+                    popularTimezones.push(person.timezone);
+                }
+            });
+
+            const localTZ = DateTime.local().zoneName;
+            if (!popularTimezones.includes(localTZ)) {
+                popularTimezones.push(localTZ);
+            }
+
+            popularTimezones.sort().forEach(tz => {
+                const option = document.createElement("option");
+                option.value = tz;
+                option.textContent = tz;
+                if (tz === localTZ) {
+                    option.textContent = `${localTZ} (My)`;
+                }
+                tzSelect.appendChild(option);
+            });
+
+            tzSelect.value = localTZ;
+            currentTZ = localTZ;
+        }
+
+        function updateTable() {
+            tableBody.innerHTML = "";
+            let currentGroup = "";
+
+            const startOfTargetDay = DateTime.now().setZone(currentTZ).startOf('day');
+
+            teamData.forEach(person => {
+
+                if (person.position && person.position !== currentGroup) {
+                    currentGroup = person.position;
+                    const groupRow = document.createElement("tr");
+                    groupRow.className = "group-header";
+                    groupRow.innerHTML = `<th colspan="28">${currentGroup.toUpperCase()}</th>`;
+                    tableBody.appendChild(groupRow);
+
+                    // --- ОНОВЛЕННЯ: Додаємо рядок 00-23 ---
+                    const headerRow = document.createElement("tr");
+                    headerRow.className = "timeline-header-labels";
+                    headerRow.innerHTML = timelineHeaderHTML;
+                    tableBody.appendChild(headerRow);
+                    // --- Кінець оновлення ---
+                }
+
+                const row = document.createElement("tr");
+
+                if (!person.timezone || person.workTime.length === 0) {
+                    row.innerHTML = `<td>${person.name}</td><td colspan="27"><i>No schedule data</i></td>`;
+                    tableBody.appendChild(row);
+                    return;
+                }
+
+                let currentStatus = { text: "Offline", class: "offline" };
+                const nowInPersonTZ = DateTime.now().setZone(person.timezone);
+                const workIntervalsConverted = [];
+
+                const personAbsIntervals = [];
+                [-1, 0, 1].forEach(dayOffset => {
+                    person.workTime.forEach(interval => {
+                        const startTime = interval.start.includes(':') ? interval.start : `${interval.start}:00`;
+                        const endTime = interval.end.includes(':') ? interval.end : `${interval.end}:00`;
+
+                        const [startHour, startMin] = startTime.split(':').map(Number);
+                        let [endHour, endMin] = endTime.split(':').map(Number);
+
+                        if (endTime === "00:00") {
+                            endHour = 24;
+                            endMin = 0;
+                        }
+
+                        let startDT = nowInPersonTZ.plus({days: dayOffset}).set({ hour: startHour, minute: startMin, second: 0 });
+                        let endDT;
+
+                        if (endHour === 24) {
+                             endDT = nowInPersonTZ.plus({days: dayOffset + 1}).startOf('day');
+                        } else {
+                             endDT = nowInPersonTZ.plus({days: dayOffset}).set({ hour: endHour, minute: endMin, second: 0 });
+                        }
+
+                        if (endDT < startDT) {
+                            endDT = endDT.plus({ days: 1 });
+                        }
+
+                        personAbsIntervals.push({
+                            interval: Interval.fromDateTimes(startDT, endDT),
+                            type: interval.type
+                        });
+
+                        if (dayOffset === 0) {
+                            const convertedStart = startDT.setZone(currentTZ);
+                            const convertedEnd = endDT.setZone(currentTZ);
+
+                            let convertedEndTime = convertedEnd.toFormat('HH:mm');
+                            if(convertedEnd.hour === 0 && convertedEnd.minute === 0 && convertedEnd > convertedStart) {
+                                convertedEndTime = "24:00";
+                            }
+
+                            workIntervalsConverted.push(
+                                `<span class="time-interval ${interval.type}">
+                                    ${convertedStart.toFormat('HH:mm')} - ${convertedEndTime}
+                                </span>`
+                            );
+                        }
+                    });
+                });
+
+                const now = DateTime.now();
+                personAbsIntervals.forEach(pInterval => {
+                    if (pInterval.interval.contains(now)) {
+                        if (pInterval.type === 'work') {
+                            currentStatus = { text: "Online", class: "online" };
+                        } else if (pInterval.type === 'possible' && currentStatus.class !== 'online') {
+                            currentStatus = { text: "Possible", class: "possible" };
+                        }
+                    }
+                });
+
+                row.innerHTML = `
+                    <td>${person.name}</td>
+                    <td><span class="status ${currentStatus.class}">${currentStatus.text}</span></td>
+                    <td>${workIntervalsConverted.join('') || '<i>(See timeline)</i>'}</td>
+                    <td class="local-time">${nowInPersonTZ.toFormat('HH:mm (dd.MM)')}</td>
+                `;
+
+                for (let i = 0; i < 24; i++) {
+                    const cell = document.createElement('td');
+                    cell.className = 'hour-cell';
+
+                    const hourStart = startOfTargetDay.plus({ hours: i });
+                    const hourEnd = hourStart.plus({ hours: 1 });
+                    const checkInterval = Interval.fromDateTimes(hourStart, hourEnd);
+
+                    let segmentsHTML = '';
+
+                    personAbsIntervals.forEach(pInterval => {
+                        if (pInterval.type === 'possible' && checkInterval.overlaps(pInterval.interval)) {
+                            const overlap = checkInterval.intersection(pInterval.interval);
+                            const startOffsetMinutes = overlap.start.diff(hourStart, 'minutes').minutes;
+                            const durationMinutes = overlap.toDuration('minutes').minutes;
+
+                            const leftPercent = (startOffsetMinutes / 60) * 100;
+                            const widthPercent = (durationMinutes / 60) * 100;
+
+                            segmentsHTML += `<div class="hour-segment segment-possible" style="left: ${leftPercent}%; width: ${widthPercent}%;"></div>`;
+                        }
+                    });
+
+                    personAbsIntervals.forEach(pInterval => {
+                        if (pInterval.type === 'work' && checkInterval.overlaps(pInterval.interval)) {
+                            const overlap = checkInterval.intersection(pInterval.interval);
+                            const startOffsetMinutes = overlap.start.diff(hourStart, 'minutes').minutes;
+                            const durationMinutes = overlap.toDuration('minutes').minutes;
+
+                            const leftPercent = (startOffsetMinutes / 60) * 100;
+                            const widthPercent = (durationMinutes / 60) * 100;
+
+                            segmentsHTML += `<div class="hour-segment segment-work" style="left: ${leftPercent}%; width: ${widthPercent}%;"></div>`;
+                        }
+                    });
+
+                    cell.innerHTML = `<div class="hour-bar-container">${segmentsHTML}</div>`;
+                    cell.title = `${hourStart.toFormat('HH:mm')} - ${hourEnd.toFormat('HH:mm')}`;
+                    row.appendChild(cell);
+                }
+
+                tableBody.appendChild(row);
+            });
+        }
+
+
+        populateTimezones();
+        updateTable();
+
+        setInterval(updateTable, 60000);
+
+        tzSelect.addEventListener("change", () => {
+            currentTZ = tzSelect.value;
+            updateTable();
+        });
+
+        localTzBtn.addEventListener("click", () => {
+            const localTZ = DateTime.local().zoneName;
+            tzSelect.value = localTZ;
+            currentTZ = localTZ;
+            updateTable();
+        });
+
+    </script>
+</body>
+</html>
